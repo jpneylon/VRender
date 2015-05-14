@@ -3,7 +3,7 @@
 extern "C"
 void initializeVRender( char            *data,
                         uint            size,
-                        uint3           *colormap
+                        uint3           *colormap,
                         cudaExtent      volumeSize,
                         uint            imageW,
                         uint            imageH )

@@ -29,7 +29,7 @@ class VRender
         void set_vrender_zoom( float dy );
 
         int init_vrender( char *data,
-                          int3 data_size,
+                          uint data_size,
                           uint3 *color_map );
 
         int get_width()

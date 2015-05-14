@@ -22,7 +22,7 @@ VR_Window::select_file()
     GtkWidget *file;
 
     file = gtk_file_chooser_dialog_new( "Point Cloud Renderer", NULL,
-                                        GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
+                                        GTK_FILE_CHOOSER_ACTION_OPEN,
                                         "CANCEL", GTK_RESPONSE_CANCEL,
                                         "OPEN", GTK_RESPONSE_ACCEPT,
                                         NULL);
