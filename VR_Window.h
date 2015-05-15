@@ -6,6 +6,7 @@
 #include "VRender.h"
 
 #define STARTDIR "/home/anand/code/data"
+#define MAX_VOLUME_SIZE 512
 
 class Cloud
 {
@@ -59,7 +60,7 @@ class VR_Window : public Gtk::Box
   private:
 
     void select_file();
-
+    void create_color_maps();
     void update_render_buffer();
     void set_render_density();
     void set_render_brightness();
@@ -74,8 +75,10 @@ class VR_Window : public Gtk::Box
     VRender vrender;
     Cloud cloud;
 
-    char *render_grid;
-    uint3 *color_map;
+    bool maps_allocated;
+    unsigned char *red_map;
+    unsigned char *green_map;
+    unsigned char *blue_map;
 
     char *point_cloud_list_file;
     bool renderer_open;

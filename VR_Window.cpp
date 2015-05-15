@@ -8,10 +8,17 @@ VR_Window::VR_Window()
 
     renderer_open = false;
     pc_file_open = false;
+    maps_allocated = false;
 }
 
 VR_Window::~VR_Window()
 {
+    if (maps_allocated)
+    {
+        delete [] red_map;
+        delete [] green_map;
+        delete [] blue_map;
+    }
     hide();
 }
 
@@ -97,7 +104,7 @@ VR_Window::open_file()
         world_size.y = (int)cloud.data_dim.y;
         world_size.z = (int)cloud.data_dim.z;
         cloud.world_res = 1;
-        while ( world_size.x > 1000 || world_size.y > 1000 || world_size.z > 1000 )
+        while ( world_size.x > MAX_VOLUME_SIZE || world_size.y > MAX_VOLUME_SIZE || world_size.z > MAX_VOLUME_SIZE )
         {
             world_size.x /= 2;
             world_size.y /= 2;
@@ -118,6 +125,8 @@ VR_Window::open_file()
         cloud.world_start.z = cloud.world_origin.z - 0.5 * cloud.world_dim;
         printf("\n World Start: %f %f %f\n", cloud.world_start.x, cloud.world_start.y, cloud.world_start.z );
 
+        create_color_maps();
+
         printf("\n");
     }
     else
@@ -132,6 +141,98 @@ VR_Window::print_file()
     {
         printf("\n Current Directory: %s\n", point_cloud_list_file);
     }
+}
+
+
+void
+VR_Window::create_color_maps()
+{
+    red_map = new unsigned char[cloud.world_count];
+    green_map = new unsigned char[cloud.world_count];
+    blue_map = new unsigned char[cloud.world_count];
+    maps_allocated = true;
+
+    memset( red_map, 0, cloud.world_count );
+    memset( green_map, 0, cloud.world_count );
+    memset( blue_map, 0, cloud.world_count );
+
+    uint *map_counter;
+    map_counter = new uint[cloud.world_count];
+    memset( map_counter, 0, cloud.world_count * sizeof(uint) );
+/*
+    for (uint x = 0; x < cloud.world_size; x++)
+    for (uint y = 0; y < cloud.world_size; y++)
+    for (uint z = 0; z < cloud.world_size; z++)
+    {
+        unsigned long index = x + cloud.world_size * (y + cloud.world_size * z);
+        red_map[index] = x % 256;
+        green_map[index] = y % 256;
+        blue_map[index] = z % 256;
+
+        if (index == 1000)
+          printf("\n %lu: %d %d %d : %d %d %d", index, x, y, z,
+                                               red_map[index], green_map[index], blue_map[index] );
+    }
+*/
+    for (uint p=0; p<cloud.count; p++)
+    {
+        float3 pos = cloud.position[p];
+        uint3 rgb = cloud.rgb[p];
+
+        float3 dist;
+        dist.x = pos.x - cloud.world_start.x;
+        dist.y = pos.y - cloud.world_start.y;
+        dist.z = pos.z - cloud.world_start.z;
+
+        uint3 loc;
+        loc.x = dist.x / cloud.world_res;
+        loc.y = dist.y / cloud.world_res;
+        loc.z = dist.z / cloud.world_res;
+
+        if ( loc.x < 0 || loc.x >= cloud.world_size ||
+             loc.y < 0 || loc.y >= cloud.world_size ||
+             loc.z < 0 || loc.z >= cloud.world_size  ) continue;
+
+        unsigned long index = loc.x + cloud.world_size * (loc.y + cloud.world_size * loc.z);
+
+        if (map_counter[index] == 0)
+        {
+            red_map[index] = rgb.x;
+            green_map[index] = rgb.y;
+            blue_map[index] = rgb.z;
+
+            map_counter[index] = 1;
+        }
+        else
+        {
+            map_counter[index]++;
+            float n = (float)map_counter[index];
+
+            float r = (float)red_map[index];
+            float g = (float)green_map[index];
+            float b = (float)blue_map[index];
+
+            r *= (n-1) / n;
+            r += (float)rgb.x / n;
+            red_map[index] = (unsigned char)r;
+
+            g *= (n-1) / n;
+            g += (float)rgb.y / n;
+            green_map[index] = (unsigned char)g;
+
+            b *= (n-1) / n;
+            b += (float)rgb.z / n;
+            blue_map[index] = (unsigned char)b;
+        }
+
+        if (p == cloud.count - 1)
+          printf("\n %d: %f %f %f -> %d %d %d : %d %d %d", p,
+                                                           pos.x, pos.y, pos.z,
+                                                           loc.x, loc.y, loc.z,
+                                                           red_map[index], green_map[index], blue_map[index] );
+    }
+
+    delete [] map_counter;
 }
 
 
@@ -237,21 +338,23 @@ VR_Window::render_button_press_event(GdkEventButton *event)
 bool
 VR_Window::render_motion_notify_event(GdkEventMotion *event)
 {
-    /*printf("\n Event-State: %d\n Button1-Mask: %d\n Condition1: %d\n Condition2: %d\n Condition3: %d\n",
-                event->state, GDK_BUTTON1_MASK,
-                event->state == GDK_BUTTON1_MASK,
-                event->state == (GDK_BUTTON1_MASK + GDK_SHIFT_MASK),
-                event->state == (GDK_BUTTON1_MASK + GDK_CONTROL_MASK) );*/
-
-    if (event->state == GDK_BUTTON1_MASK)
+    /*printf("\n Event-State: %d\n Button1-Mask: %d\n Button2-Mask: %d\n Button3-Mask: %d\n Condition1: %d\n Condition2: %d\n Condition3: %d\n Condition4: %d\n Condition5: %d\n",
+                event->state, GDK_BUTTON1_MASK, GDK_BUTTON2_MASK, GDK_BUTTON3_MASK,
+                event->state == GDK_BUTTON1_MASK+16,
+                event->state == GDK_BUTTON2_MASK+16,
+                event->state == GDK_BUTTON3_MASK+16,
+                event->state == (GDK_BUTTON1_MASK+GDK_SHIFT_MASK+16),
+                event->state == (GDK_BUTTON1_MASK+GDK_CONTROL_MASK+16) );
+    */
+    if (event->state == GDK_BUTTON1_MASK+16)
     {
         update_render_rotation(event->x, event->y);
     }
-    else if (event->state == (GDK_BUTTON1_MASK + GDK_SHIFT_MASK))
+    else if (event->state == (GDK_BUTTON1_MASK+GDK_SHIFT_MASK+16) || event->state == GDK_BUTTON2_MASK+16)
     {
         update_render_translation(event->x, event->y);
     }
-    else if (event->state == (GDK_BUTTON1_MASK + GDK_CONTROL_MASK))
+    else if (event->state == (GDK_BUTTON1_MASK+GDK_CONTROL_MASK+16) || event->state == GDK_BUTTON3_MASK+16)
     {
         update_render_zoom(event->x, event->y);
     }
@@ -262,7 +365,7 @@ VR_Window::render_motion_notify_event(GdkEventMotion *event)
 void
 VR_Window::create_render_window()
 {
-    vrender.init_vrender( render_grid, cloud.world_size, color_map );
+    vrender.init_vrender( cloud.world_size, red_map, green_map, blue_map );
 
     Gtk::Box *render_vbox = new Gtk::Box(Gtk::ORIENTATION_VERTICAL, 1);
 
@@ -302,6 +405,8 @@ VR_Window::create_render_window()
                                                     vrender.get_height(),
                                                     vrender.get_width() * 3 );
 
+
+
     render_image.set( render_pixbuf );
     render_eventbox->add( render_image );
 
@@ -326,7 +431,7 @@ VR_Window::create_render_window()
     bright_hbox = new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL, 1);
     bright_label = new Gtk::Label("Brightness: ");
     bright_hbox->pack_start(bright_label[0], false, false, 0);
-    bright_adjust = Gtk::Adjustment::create( vrender.get_brightness(), 0, 5.1, 0.01, 0.1, 0.1);
+    bright_adjust = Gtk::Adjustment::create( vrender.get_brightness(), 0, 25.1, 0.1, 0.1, 0.1);
     bright_adjust->signal_value_changed().connect( sigc::mem_fun( *this, &VR_Window::set_render_brightness) );
     bright_scale = new Gtk::Scale( bright_adjust, Gtk::ORIENTATION_HORIZONTAL );
     bright_scale->set_digits(2);
@@ -348,12 +453,11 @@ VR_Window::create_render_window()
     scale_hbox = new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL, 1);
     scale_label = new Gtk::Label("Scale: ");
     scale_hbox->pack_start(scale_label[0], false, false, 0);
-    scale_adjust = Gtk::Adjustment::create( vrender.get_scale(), 0, 5.5, 0.1, 0.5, 0.5);
+    scale_adjust = Gtk::Adjustment::create( vrender.get_scale(), 0, 25.5, 0.1, 0.5, 0.5);
     scale_adjust->signal_value_changed().connect( sigc::mem_fun( *this, &VR_Window::set_render_scale) );
     scale_scale = new Gtk::Scale( scale_adjust, Gtk::ORIENTATION_HORIZONTAL );
     scale_scale->set_digits(2);
-
-    scale_hbox->pack_start(offset_scale[0], true, true, 0);
+    scale_hbox->pack_start(scale_scale[0], true, true, 0);
     render_vbox->pack_start(scale_hbox[0], false, false, 0);
 
     pack_start(render_vbox[0], true, true, 0);

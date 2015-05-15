@@ -1,70 +1,84 @@
 #include "VRender_cuda_kernel.cuh"
 
 extern "C"
-void initializeVRender( char            *data,
-                        uint            size,
-                        uint3           *colormap,
+void initializeVRender( void  *red_map,
+                        void  *green_map,
+                        void  *blue_map,
                         cudaExtent      volumeSize,
                         uint            imageW,
                         uint            imageH )
 {
-    size_t data_size = size * size * size * sizeof(unsigned char);
+    cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<uchar>();
 
-    checkCudaErrors( cudaMalloc( (void**) &d_charvol, data_size ) );
-    checkCudaErrors( cudaMemcpy( d_charvol, data, data_size, cudaMemcpyHostToDevice ) );
+    // RED
+    checkCudaErrors( cudaMalloc3DArray( &d_redArray, &channelDesc, volumeSize ) );
 
-    cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<unsigned char>();
-    checkCudaErrors( cudaMalloc3DArray( &d_volumeArray, &channelDesc, volumeSize ) );
+    redParams.srcPtr   =   make_cudaPitchedPtr( red_map, volumeSize.width*sizeof(uchar), volumeSize.width, volumeSize.height );
+    redParams.dstArray =   d_redArray;
+    redParams.extent   =   volumeSize;
+    redParams.kind     =   cudaMemcpyHostToDevice;
+    checkCudaErrors( cudaMemcpy3D( &redParams ) );
 
-    cudaMemcpy3DParms copyParams;
-    copyParams.srcPtr   =   make_cudaPitchedPtr( d_charvol, volumeSize.width * sizeof(unsigned char), volumeSize.width, volumeSize.height );
-    copyParams.dstArray =   d_volumeArray;
-    copyParams.extent   =   volumeSize;
-    copyParams.kind     =   cudaMemcpyDeviceToDevice;
-    checkCudaErrors( cudaMemcpy3D( &copyParams ) );
+    texRed.normalized = true;
+    texRed.filterMode = cudaFilterModeLinear;
+    texRed.addressMode[0] = cudaAddressModeClamp;
+    texRed.addressMode[1] = cudaAddressModeClamp;
+    texRed.addressMode[2] = cudaAddressModeClamp;
 
-    tex.normalized = true;
-    tex.filterMode = cudaFilterModeLinear;
-    tex.addressMode[0] = cudaAddressModeClamp;
-    tex.addressMode[1] = cudaAddressModeClamp;
+    checkCudaErrors( cudaBindTextureToArray( texRed, d_redArray, channelDesc ) );
 
-    checkCudaErrors( cudaBindTextureToArray( tex, d_volumeArray, channelDesc ) );
+    // GREEN
+    checkCudaErrors( cudaMalloc3DArray( &d_greenArray, &channelDesc, volumeSize ) );
 
-    float4 transferFunc[] = {
-        { 0, 0, 0, 0 },
-        { 0.2, 0.2, 0.2, 1 },
-        { 0.4, 0.4, 0.4, 1 },
-        { 0.6, 0.6, 0.6, 1 },
-        { 0.8, 0.8, 0.8, 1 },
-        { 1, 1, 1, 1 }
-    };
+    greenParams.srcPtr   =   make_cudaPitchedPtr( green_map, volumeSize.width*sizeof(uchar), volumeSize.width, volumeSize.height );
+    greenParams.dstArray =   d_greenArray;
+    greenParams.extent   =   volumeSize;
+    greenParams.kind     =   cudaMemcpyHostToDevice;
+    checkCudaErrors( cudaMemcpy3D( &greenParams ) );
 
-    cudaChannelFormatDesc channelDesc2 = cudaCreateChannelDesc<float4>();
-    cudaArray *d_transferFuncArray;
+    texGreen.normalized = true;
+    texGreen.filterMode = cudaFilterModeLinear;
+    texGreen.addressMode[0] = cudaAddressModeClamp;
+    texGreen.addressMode[1] = cudaAddressModeClamp;
+    texGreen.addressMode[2] = cudaAddressModeClamp;
 
-    checkCudaErrors( cudaMallocArray( &d_transferFuncArray, &channelDesc2, sizeof(transferFunc) / sizeof(float4), 1 ) );
-    checkCudaErrors( cudaMemcpyToArray( d_transferFuncArray, 0, 0, transferFunc, sizeof(transferFunc), cudaMemcpyHostToDevice ) );
+    checkCudaErrors( cudaBindTextureToArray( texGreen, d_greenArray, channelDesc ) );
 
-    transferTex.filterMode = cudaFilterModeLinear;
-    transferTex.normalized = true;
-    transferTex.addressMode[0] = cudaAddressModeClamp;
+    // BLUE
+    checkCudaErrors( cudaMalloc3DArray( &d_blueArray, &channelDesc, volumeSize ) );
 
-    checkCudaErrors( cudaBindTextureToArray( transferTex, d_transferFuncArray, channelDesc2 ) );
+    blueParams.srcPtr   =   make_cudaPitchedPtr( blue_map, volumeSize.width*sizeof(uchar), volumeSize.width, volumeSize.height );
+    blueParams.dstArray =   d_blueArray;
+    blueParams.extent   =   volumeSize;
+    blueParams.kind     =   cudaMemcpyHostToDevice;
+    checkCudaErrors( cudaMemcpy3D( &blueParams ) );
 
-    checkCudaErrors( cudaMalloc( (void**) &d_volume, imageW * imageH * 3 * sizeof(unsigned char) ) );
+    texBlue.normalized = true;
+    texBlue.filterMode = cudaFilterModeLinear;
+    texBlue.addressMode[0] = cudaAddressModeClamp;
+    texBlue.addressMode[1] = cudaAddressModeClamp;
+    texBlue.addressMode[2] = cudaAddressModeClamp;
+
+    checkCudaErrors( cudaBindTextureToArray( texBlue, d_blueArray, channelDesc ) );
+
+    // OUTPUT BUFFER
+    checkCudaErrors( cudaMalloc( (void**) &d_volume, imageW * imageH * 3 * sizeof(uchar) ) );
+    checkCudaErrors( cudaMemset( d_volume, 0, imageW * imageH * 3 * sizeof(uchar) ) );
 }
 
 
 extern "C"
 void freeCudaBuffers()
 {
-    checkCudaErrors( cudaUnbindTexture(tex) );
-    checkCudaErrors( cudaFreeArray(d_volumeArray) );
+    checkCudaErrors( cudaUnbindTexture(texRed) );
+    checkCudaErrors( cudaFreeArray(d_redArray) );
 
-    checkCudaErrors( cudaUnbindTexture(transferTex) );
-    checkCudaErrors( cudaFreeArray(d_transferFuncArray) );
+    checkCudaErrors( cudaUnbindTexture(texGreen) );
+    checkCudaErrors( cudaFreeArray(d_greenArray) );
 
-    checkCudaErrors( cudaFree( d_charvol ) );
+    checkCudaErrors( cudaUnbindTexture(texBlue) );
+    checkCudaErrors( cudaFreeArray(d_blueArray) );
+
     checkCudaErrors( cudaFree( d_volume ) );
 }
 
@@ -73,12 +87,12 @@ extern "C"
 void render_kernel( dim3 gridSize, dim3 blockSize,
                     unsigned char *buffer,
                     uint imageW, uint imageH,
-                    float dens, float bright, float offset, float scale, float weight )
+                    float dens, float bright, float offset, float scale )
 {
     checkCudaErrors( cudaMemset( d_volume, 0, imageW * imageH * 3 * sizeof(unsigned char) ) );
     d_render<<<gridSize,blockSize>>>( d_volume,
                                       imageW, imageH,
-                                      dens, bright, offset, scale, weight );
+                                      dens, bright, offset, scale );
     checkCudaErrors( cudaMemcpy( buffer, d_volume, imageW * imageH * 3 * sizeof(unsigned char), cudaMemcpyDeviceToHost ) );
 }
 

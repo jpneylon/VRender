@@ -5,20 +5,19 @@ VRender::VRender()
 {
     volumeSize = make_cudaExtent( 256, 256, 256 );
 
-    width = 800;
-    height = 800;
+    width = 640;
+    height = 640;
 
     blockSize.x = 16;
     blockSize.y = 16;
 
     viewRotation = make_float3( 90, 180, 0 );
-    viewTranslation = make_float3( 0, 0, 3 );
+    viewTranslation = make_float3( 0, 0, 5 );
 
     density = 0.1f;
     brightness = 1.5f;
     transferOffset = 0.0f;
     transferScale = 1.0f;
-    weight = 1.0f;
 }
 VRender::~VRender()
 {
@@ -69,18 +68,19 @@ VRender:: set_vrender_zoom( float dy )
 }
 
 int
-VRender:: init_vrender( char *data,
-                        uint  data_size,
-                        uint3 *color_map )
+VRender:: init_vrender( unsigned int   data_size,
+                        unsigned char  *red_map,
+                        unsigned char  *green_map,
+                        unsigned char  *blue_map )
 {
     volumeSize.width = data_size;
     volumeSize.height = data_size;
     volumeSize.depth = data_size;
 
     render_buf = new unsigned char[ height * width * 3 ];
-    memset( render_buf, 0, height * width * 3 );
+    memset( render_buf, 0, height * width * 3 * sizeof(unsigned char) );
 
-    initializeVRender( data, data_size, color_map, volumeSize, width, height );
+    initializeVRender( red_map, green_map, blue_map, volumeSize, width, height );
 
     gridSize = dim3( iDivUp( width, blockSize.x), iDivUp(height, blockSize.y) );
 
@@ -123,7 +123,7 @@ void
 VRender:: render()
 {
     memset( render_buf, 0, width * height * 3 * sizeof(unsigned char) );
-    render_kernel( gridSize, blockSize, render_buf, width, height, density, brightness, transferOffset, transferScale, weight );
+    render_kernel( gridSize, blockSize, render_buf, width, height, density, brightness, transferOffset, transferScale );
     getLastCudaError("Kernel execution failed");
 }
 

@@ -28,9 +28,10 @@ class VRender
         void set_vrender_translation( float dx, float dy );
         void set_vrender_zoom( float dy );
 
-        int init_vrender( char *data,
-                          uint data_size,
-                          uint3 *color_map );
+        int init_vrender( unsigned int  data_size,
+                          unsigned char *red_map,
+                          unsigned char *green_map,
+                          unsigned char *blue_map );
 
         int get_width()
         {
@@ -131,7 +132,6 @@ class VRender
         float brightness;
         float transferOffset;
         float transferScale;
-        float weight;
         float last_x, last_y;
 
         unsigned char *render_buf;

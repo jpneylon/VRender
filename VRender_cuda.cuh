@@ -1,8 +1,8 @@
 
 extern "C"
-    void initializeVRender( char *data,
-                            uint size,
-                            uint3 *color_map,
+    void initializeVRender( unsigned char *red_map,
+                            unsigned char *green_map,
+                            unsigned char *blue_map,
                             cudaExtent volumeSize,
                             uint imageW, uint imageH );
 
@@ -13,7 +13,7 @@ extern "C"
     void render_kernel( dim3 gridSize, dim3 blockSize,
                         unsigned char *buffer,
                         uint imageW, uint imageH,
-                        float dens, float bright, float offset, float scale, float weight );
+                        float dens, float bright, float offset, float scale );
 
 extern "C"
     void copyInvViewMatrix( float *invViewMatrix,
