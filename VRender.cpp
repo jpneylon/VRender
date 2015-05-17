@@ -5,19 +5,19 @@ VRender::VRender()
 {
     volumeSize = make_cudaExtent( 256, 256, 256 );
 
-    width = 640;
-    height = 640;
+    width = 400;
+    height = 400;
 
     blockSize.x = 16;
     blockSize.y = 16;
 
-    viewRotation = make_float3( 90, 180, 0 );
-    viewTranslation = make_float3( 0, 0, 5 );
+    viewRotation = make_float3( 90, 90, 0 );
+    viewTranslation = make_float3( 0, 0, 0 );
 
-    density = 0.1f;
-    brightness = 1.5f;
+    density = 0.01f;
+    brightness = 15.f;
     transferOffset = 0.0f;
-    transferScale = 1.0f;
+    transferScale = 15.0f;
 }
 VRender::~VRender()
 {
@@ -27,13 +27,13 @@ VRender::~VRender()
 
 
 unsigned char *
-VRender:: get_vrender_buffer()
+VRender::get_vrender_buffer()
 {
     render();
     return render_buf;
 }
 void
-VRender:: set_vrender_parameters( float r_dens, float r_bright, float r_offset, float r_scale )
+VRender::set_vrender_parameters( float r_dens, float r_bright, float r_offset, float r_scale )
 {
     density = r_dens;
     brightness = r_bright;
@@ -41,7 +41,7 @@ VRender:: set_vrender_parameters( float r_dens, float r_bright, float r_offset, 
     transferScale = r_scale;
 }
 void
-VRender:: set_vrender_rotation( float dx, float dy )
+VRender::set_vrender_rotation( float dx, float dy )
 {
     viewRotation.x -= dy;
     viewRotation.y += dx;
@@ -50,16 +50,16 @@ VRender:: set_vrender_rotation( float dx, float dy )
     setInvViewMatrix();
 }
 void
-VRender:: set_vrender_translation( float dx, float dy )
+VRender::set_vrender_translation( float dx, float dy )
 {
     viewTranslation.x += dx;
-    viewTranslation.y -= dy;
+    viewTranslation.y += dy;
 
     transformModelViewMatrix();
     setInvViewMatrix();
 }
 void
-VRender:: set_vrender_zoom( float dy )
+VRender::set_vrender_zoom( float dy )
 {
     viewTranslation.z += dy;
 
@@ -68,7 +68,7 @@ VRender:: set_vrender_zoom( float dy )
 }
 
 int
-VRender:: init_vrender( unsigned int   data_size,
+VRender::init_vrender( unsigned int   data_size,
                         unsigned char  *red_map,
                         unsigned char  *green_map,
                         unsigned char  *blue_map )
@@ -82,7 +82,7 @@ VRender:: init_vrender( unsigned int   data_size,
 
     initializeVRender( red_map, green_map, blue_map, volumeSize, width, height );
 
-    gridSize = dim3( iDivUp( width, blockSize.x), iDivUp(height, blockSize.y) );
+    gridSize = dim3( iDivUp(width, blockSize.x), iDivUp(height, blockSize.y) );
 
     memset( identityMatrix, 0, 16 * sizeof(float ) );
     identityMatrix[0]  = 1;
@@ -101,7 +101,7 @@ VRender:: init_vrender( unsigned int   data_size,
 
 
 void
-VRender:: setInvViewMatrix()
+VRender::setInvViewMatrix()
 {
     invViewMatrix[0]     =   modelViewMatrix[0];    //rot_x.x
     invViewMatrix[1]     =   modelViewMatrix[1];    //rot_x.y
@@ -120,7 +120,7 @@ VRender:: setInvViewMatrix()
 }
 
 void
-VRender:: render()
+VRender::render()
 {
     memset( render_buf, 0, width * height * 3 * sizeof(unsigned char) );
     render_kernel( gridSize, blockSize, render_buf, width, height, density, brightness, transferOffset, transferScale );
@@ -128,7 +128,7 @@ VRender:: render()
 }
 
 void
-VRender:: translateMat( float *matrix, float3 translation )
+VRender::translateMat( float *matrix, float3 translation )
 {
     float3 start = make_float3( matrix[3], matrix[7], matrix[11] );
 
@@ -147,7 +147,7 @@ VRender:: translateMat( float *matrix, float3 translation )
 }
 
 void
-VRender:: rotMat( float *matrix, float3 axis, float theta, float3 center )
+VRender::rotMat( float *matrix, float3 axis, float theta, float3 center )
 {
     for (int v=0; v<3; v++)
     {
@@ -178,7 +178,7 @@ VRender:: rotMat( float *matrix, float3 axis, float theta, float3 center )
 }
 
 void
-VRender:: multiplyModelViewMatrix( float *trans )
+VRender::multiplyModelViewMatrix( float *trans )
 {
     float *result;
     result = new float[16];
@@ -191,10 +191,10 @@ VRender:: multiplyModelViewMatrix( float *trans )
                                       trans[2 + 4*r],
                                       trans[3 + 4*r] );
 
-            float4 col = make_float4( modelViewMatrix[0 + 4*r],
-                                      modelViewMatrix[1 + 4*r],
-                                      modelViewMatrix[2 + 4*r],
-                                      modelViewMatrix[3 + 4*r] );
+            float4 col = make_float4( modelViewMatrix[0 + c],
+                                      modelViewMatrix[4 + c],
+                                      modelViewMatrix[8 + c],
+                                      modelViewMatrix[12 + c] );
 
             result[c + 4*r] = row.x * col.x +
                               row.y * col.y +
@@ -207,7 +207,7 @@ VRender:: multiplyModelViewMatrix( float *trans )
 }
 
 void
-VRender:: transformModelViewMatrix()
+VRender::transformModelViewMatrix()
 {
     float *matrix;
     matrix = new float[16];

@@ -282,6 +282,7 @@ VR_Window::set_render_scale()
 void
 VR_Window::update_render_zoom(gdouble x, gdouble y)
 {
+    printf("\n ZOOM!");
     float dy = (y - vrender.get_last_y()) / 100;
 
     vrender.set_vrender_zoom( dy );
@@ -293,6 +294,7 @@ VR_Window::update_render_zoom(gdouble x, gdouble y)
 void
 VR_Window::update_render_translation(gdouble x, gdouble y)
 {
+    printf("\n TRANSLATE!");
     float dx = (x - vrender.get_last_x()) / 100;
     float dy = (y - vrender.get_last_y()) / 100;
 
@@ -305,7 +307,7 @@ VR_Window::update_render_translation(gdouble x, gdouble y)
 void
 VR_Window::update_render_rotation(gdouble x, gdouble y)
 {
-    //printf("\n Event: %f %f",x,y);
+    printf("\n ROTATE!");
     float dx = (x - vrender.get_last_x()) / 5;
     float dy = (y - vrender.get_last_y()) / 5;
 
@@ -320,6 +322,12 @@ VR_Window::render_button_press_event(GdkEventButton *event)
 {
     vrender.set_last_x( event->x );
     vrender.set_last_y( event->y );
+/*
+    printf("\n Event-Button: %d\n Button1: %d\n Button2: %d\n Button3: %d\n Condition1: %d\n Condition2: %d\n Condition3: %d\n",
+                event->button, GDK_BUTTON_PRIMARY, GDK_BUTTON_SECONDARY, GDK_BUTTON_MIDDLE,
+                event->button == GDK_BUTTON_PRIMARY,
+                event->button == GDK_BUTTON_SECONDARY,
+                event->button == GDK_BUTTON_MIDDLE );
 
     if (event->button == GDK_BUTTON_PRIMARY)
     {
@@ -332,7 +340,7 @@ VR_Window::render_button_press_event(GdkEventButton *event)
     else if (event->button == GDK_BUTTON_MIDDLE)
     {
         update_render_zoom(event->x, event->y);
-    }
+    }*/
     return true;
 }
 bool
@@ -340,21 +348,21 @@ VR_Window::render_motion_notify_event(GdkEventMotion *event)
 {
     /*printf("\n Event-State: %d\n Button1-Mask: %d\n Button2-Mask: %d\n Button3-Mask: %d\n Condition1: %d\n Condition2: %d\n Condition3: %d\n Condition4: %d\n Condition5: %d\n",
                 event->state, GDK_BUTTON1_MASK, GDK_BUTTON2_MASK, GDK_BUTTON3_MASK,
-                event->state == GDK_BUTTON1_MASK+16,
-                event->state == GDK_BUTTON2_MASK+16,
-                event->state == GDK_BUTTON3_MASK+16,
-                event->state == (GDK_BUTTON1_MASK+GDK_SHIFT_MASK+16),
-                event->state == (GDK_BUTTON1_MASK+GDK_CONTROL_MASK+16) );
-    */
-    if (event->state == GDK_BUTTON1_MASK+16)
+                event->state == GDK_BUTTON1_MASK+MASK_BONUS,
+                event->state == GDK_BUTTON2_MASK+MASK_BONUS,
+                event->state == GDK_BUTTON3_MASK+MASK_BONUS,
+                event->state == (GDK_BUTTON1_MASK+GDK_SHIFT_MASK+MASK_BONUS),
+                event->state == (GDK_BUTTON1_MASK+GDK_CONTROL_MASK+MASK_BONUS) );*/
+
+    if (event->state == GDK_BUTTON1_MASK+MASK_BONUS)
     {
         update_render_rotation(event->x, event->y);
     }
-    else if (event->state == (GDK_BUTTON1_MASK+GDK_SHIFT_MASK+16) || event->state == GDK_BUTTON2_MASK+16)
+    else if (event->state == GDK_BUTTON2_MASK+MASK_BONUS)
     {
         update_render_translation(event->x, event->y);
     }
-    else if (event->state == (GDK_BUTTON1_MASK+GDK_CONTROL_MASK+16) || event->state == GDK_BUTTON3_MASK+16)
+    else if (event->state == GDK_BUTTON3_MASK+MASK_BONUS)
     {
         update_render_zoom(event->x, event->y);
     }

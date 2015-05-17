@@ -7,6 +7,8 @@
 
 #define STARTDIR "/home/anand/code/data"
 #define MAX_VOLUME_SIZE 512
+#define MASK_BONUS 0
+
 
 class Cloud
 {

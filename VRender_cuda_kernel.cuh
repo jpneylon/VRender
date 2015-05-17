@@ -34,26 +34,30 @@ struct Ray {
 
 
 __device__
-int intersectBox( Ray r, float3 boxmin, float3 boxmax, float *tnear, float *tfar )
+int intersectBox(Ray r, float3 boxmin, float3 boxmax, float *tnear, float *tfar)
 {
-    float3 invR = make_float3(1.f) / r.d;
+    // compute intersection of ray with all six bbox planes
+    float3 invR = make_float3(1.0f) / r.d;
     float3 tbot = invR * (boxmin - r.o);
     float3 ttop = invR * (boxmax - r.o);
 
+    // re-order intersections to find smallest and largest on each axis
     float3 tmin = fminf(ttop, tbot);
     float3 tmax = fmaxf(ttop, tbot);
 
-    float largest_tmin = fmaxf(fmaxf(tmin.x,tmin.y), fminf(tmin.x,tmin.z));
-    float smallest_tmax = fminf(fminf(tmax.x,tmax.y), fminf(tmax.x,tmax.z));
+    // find the largest tmin and the smallest tmax
+    float largest_tmin = fmaxf(fmaxf(tmin.x, tmin.y), fmaxf(tmin.x, tmin.z));
+    float smallest_tmax = fminf(fminf(tmax.x, tmax.y), fminf(tmax.x, tmax.z));
 
-    *tnear = largest_tmin;
-    *tfar = smallest_tmax;
+	*tnear = largest_tmin;
+	*tfar = smallest_tmax;
 
-    return smallest_tmax - largest_tmin;
+	return smallest_tmax > largest_tmin;
 }
 
+// transform vector by matrix (no translation)
 __device__
-float3 get_eye_ray_direction( const float3x4 &M, const float3 &v )
+float3 get_eye_ray_direction(const float3x4 &M, const float3 &v)
 {
     float3 r;
     r.x = dot(v, make_float3(M.m[0]));
@@ -62,14 +66,15 @@ float3 get_eye_ray_direction( const float3x4 &M, const float3 &v )
     return r;
 }
 
+// transform vector by matrix with translation
 __device__
-float4 get_eye_ray_origin( const float3x4 &M, const float4 &v )
+float4 get_eye_ray_origin(const float3x4 &M, const float4 &v)
 {
     float4 r;
     r.x = dot(v, M.m[0]);
-    r.x = dot(v, M.m[1]);
-    r.x = dot(v, M.m[2]);
-    r.w = 1.f;
+    r.y = dot(v, M.m[1]);
+    r.z = dot(v, M.m[2]);
+    r.w = 1.0f;
     return r;
 }
 
@@ -119,38 +124,42 @@ void d_render( unsigned char *d_output,
     const int maxSteps = 500;
     const float tstep = 0.01f;
     const float opacityThreshold = 0.95f;
-    const float3 boxmin = make_float3( -1.f, -1.f, -1.f );
-    const float3 boxmax = make_float3( 1.f, 1.f, 1.f );
+    const float3 boxMin = make_float3(-1.0f, -1.0f, -1.0f);
+    const float3 boxMax = make_float3(1.0f, 1.0f, 1.0f);
 
-    uint x = blockIdx.x * blockDim.x + threadIdx.x;
-    uint y = blockIdx.y * blockDim.y + threadIdx.y;
-    if ( x >= imageW || y >= imageH ) return;
+	uint x = blockIdx.x*blockDim.x + threadIdx.x;
+    uint y = blockIdx.y*blockDim.y + threadIdx.y;
+    if ((x >= imageW) || (y >= imageH)) return;
 
-    float u = (x / (float)imageW) * 2.f - 1.f;
-    float v = (y / (float)imageH) * 2.f - 1.f;
+    float u = (x / (float) imageW)*2.0f-1.0f;
+    float v = (y / (float) imageH)*2.0f-1.0f;
 
+    // calculate eye ray in world space
     Ray eyeRay;
-    eyeRay.o = make_float3( get_eye_ray_origin( c_invViewMatrix, make_float4( 0.f, 0.f, 0.f, -1.f ) ) );
-    eyeRay.d = normalize( make_float3( u, v, 2.f ) );
-    eyeRay.d = get_eye_ray_direction( c_invViewMatrix, eyeRay.d );
+    eyeRay.o = make_float3( get_eye_ray_origin(c_invViewMatrix, make_float4(0.0f, 0.0f, 0.0f, 1.0f)) );
+    eyeRay.d = normalize(make_float3(u, v, 2.0f));
+    eyeRay.d = get_eye_ray_direction(c_invViewMatrix, eyeRay.d);
 
-    float tnear, tfar;
-    int hit = intersectBox( eyeRay, boxmin, boxmax, &tnear, &tfar );
+    // find intersection with box
+	float tnear, tfar;
+	int hit = intersectBox(eyeRay, boxMin, boxMax, &tnear, &tfar);
     if (!hit) return;
-    if (tnear < 0.f) tnear = 0.f;
+	if (tnear < 0.0f) tnear = 0.0f;     // clamp to near plane
 
-    float4 sum = make_float4(0.f);
+    // march along ray from front to back, accumulating color
+    float4 sum = make_float4(0.0f);
     sum += get_pix_val( maxSteps, eyeRay, tstep, tnear, tfar, offset, scale, dens, opacityThreshold );
     sum *= bright;
 
-    float3 rgba;
-    rgba.x = __saturatef(sum.x);
+    // write output color
+    float4 rgba;
+    rgba.x = __saturatef(sum.x);   // clamp to [0.0, 1.0]
     rgba.y = __saturatef(sum.y);
     rgba.z = __saturatef(sum.z);
-
-    d_output[ 3*(x + imageW * y) + 0] = (unsigned char) (255.f * rgba.x);
-    d_output[ 3*(x + imageW * y) + 1] = (unsigned char) (255.f * rgba.y);
-    d_output[ 3*(x + imageW * y) + 2] = (unsigned char) (255.f * rgba.z);
+    rgba.w = __saturatef(sum.w);
+    d_output[3*(x + imageW * y) + 0] = (unsigned char) (255 * rgba.x);
+    d_output[3*(x + imageW * y) + 1] = (unsigned char) (255 * rgba.y);
+    d_output[3*(x + imageW * y) + 2] = (unsigned char) (255 * rgba.z);
 }
 
 
