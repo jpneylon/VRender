@@ -5,19 +5,19 @@ VRender::VRender()
 {
     volumeSize = make_cudaExtent( 256, 256, 256 );
 
-    width = 400;
-    height = 400;
+    width = 800;
+    height = 800;
 
     blockSize.x = 16;
     blockSize.y = 16;
 
-    viewRotation = make_float3( 90, 90, 0 );
-    viewTranslation = make_float3( 0, 0, 0 );
+    viewRotation = make_float3( 90, 180, 0 );
+    viewTranslation = make_float3( 0, 0, 3 );
 
-    density = 0.01f;
-    brightness = 15.f;
-    transferOffset = 0.0f;
-    transferScale = 15.0f;
+    density = 0.25f;
+    brightness = 1.f;
+    transferOffset = 0.f;
+    transferScale = 1.f;
 }
 VRender::~VRender()
 {

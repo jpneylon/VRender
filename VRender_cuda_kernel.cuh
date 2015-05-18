@@ -91,17 +91,23 @@ float4 get_pix_val( int maxSteps, Ray eyeRay, float tstep, float tnear, float tf
     {
         float red, green, blue;
         float4 col;
-        col.w = dens;
 
         blue = tex3D( texRed, pos.x * 0.5f + 0.5f, pos.y * 0.5f + 0.5f, pos.z * 0.5f + 0.5f );
         green = tex3D( texGreen, pos.x * 0.5f + 0.5f, pos.y * 0.5f + 0.5f, pos.z * 0.5f + 0.5f );
         red = tex3D( texBlue, pos.x * 0.5f + 0.5f, pos.y * 0.5f + 0.5f, pos.z * 0.5f + 0.5f );
+
+        int zero_check = (red + green + blue) != 0;
+        col.w = dens * __int2float_rn(zero_check);
 
         col.x = ((red - offset) * scale) * col.w;
         col.y = ((green - offset) * scale) * col.w;
         col.z = ((blue - offset) * scale) * col.w;
 
         sum += col * (1.f - sum.w);
+
+        // exit early if opaque
+        if (sum.w > opacity)
+            break;
 
         t += tstep;
         if (t > tfar) break;

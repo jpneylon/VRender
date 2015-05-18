@@ -282,7 +282,7 @@ VR_Window::set_render_scale()
 void
 VR_Window::update_render_zoom(gdouble x, gdouble y)
 {
-    printf("\n ZOOM!");
+    //printf("\n ZOOM!");
     float dy = (y - vrender.get_last_y()) / 100;
 
     vrender.set_vrender_zoom( dy );
@@ -294,7 +294,7 @@ VR_Window::update_render_zoom(gdouble x, gdouble y)
 void
 VR_Window::update_render_translation(gdouble x, gdouble y)
 {
-    printf("\n TRANSLATE!");
+    //printf("\n TRANSLATE!");
     float dx = (x - vrender.get_last_x()) / 100;
     float dy = (y - vrender.get_last_y()) / 100;
 
@@ -307,7 +307,7 @@ VR_Window::update_render_translation(gdouble x, gdouble y)
 void
 VR_Window::update_render_rotation(gdouble x, gdouble y)
 {
-    printf("\n ROTATE!");
+    //printf("\n ROTATE!");
     float dx = (x - vrender.get_last_x()) / 5;
     float dy = (y - vrender.get_last_y()) / 5;
 
@@ -322,12 +322,12 @@ VR_Window::render_button_press_event(GdkEventButton *event)
 {
     vrender.set_last_x( event->x );
     vrender.set_last_y( event->y );
-/*
-    printf("\n Event-Button: %d\n Button1: %d\n Button2: %d\n Button3: %d\n Condition1: %d\n Condition2: %d\n Condition3: %d\n",
+
+    /*printf("\n Event-Button: %d\n Button1: %d\n Button2: %d\n Button3: %d\n Condition1: %d\n Condition2: %d\n Condition3: %d\n",
                 event->button, GDK_BUTTON_PRIMARY, GDK_BUTTON_SECONDARY, GDK_BUTTON_MIDDLE,
                 event->button == GDK_BUTTON_PRIMARY,
                 event->button == GDK_BUTTON_SECONDARY,
-                event->button == GDK_BUTTON_MIDDLE );
+                event->button == GDK_BUTTON_MIDDLE );*/
 
     if (event->button == GDK_BUTTON_PRIMARY)
     {
@@ -340,7 +340,7 @@ VR_Window::render_button_press_event(GdkEventButton *event)
     else if (event->button == GDK_BUTTON_MIDDLE)
     {
         update_render_zoom(event->x, event->y);
-    }*/
+    }
     return true;
 }
 bool
@@ -413,8 +413,6 @@ VR_Window::create_render_window()
                                                     vrender.get_height(),
                                                     vrender.get_width() * 3 );
 
-
-
     render_image.set( render_pixbuf );
     render_eventbox->add( render_image );
 
@@ -439,7 +437,7 @@ VR_Window::create_render_window()
     bright_hbox = new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL, 1);
     bright_label = new Gtk::Label("Brightness: ");
     bright_hbox->pack_start(bright_label[0], false, false, 0);
-    bright_adjust = Gtk::Adjustment::create( vrender.get_brightness(), 0, 25.1, 0.1, 0.1, 0.1);
+    bright_adjust = Gtk::Adjustment::create( vrender.get_brightness(), 0, 10.1, 0.1, 0.1, 0.1);
     bright_adjust->signal_value_changed().connect( sigc::mem_fun( *this, &VR_Window::set_render_brightness) );
     bright_scale = new Gtk::Scale( bright_adjust, Gtk::ORIENTATION_HORIZONTAL );
     bright_scale->set_digits(2);
@@ -461,7 +459,7 @@ VR_Window::create_render_window()
     scale_hbox = new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL, 1);
     scale_label = new Gtk::Label("Scale: ");
     scale_hbox->pack_start(scale_label[0], false, false, 0);
-    scale_adjust = Gtk::Adjustment::create( vrender.get_scale(), 0, 25.5, 0.1, 0.5, 0.5);
+    scale_adjust = Gtk::Adjustment::create( vrender.get_scale(), 0, 10.5, 0.1, 0.5, 0.5);
     scale_adjust->signal_value_changed().connect( sigc::mem_fun( *this, &VR_Window::set_render_scale) );
     scale_scale = new Gtk::Scale( scale_adjust, Gtk::ORIENTATION_HORIZONTAL );
     scale_scale->set_digits(2);
@@ -472,6 +470,7 @@ VR_Window::create_render_window()
     show_all_children();
 
     renderer_open = true;
+    update_render_buffer();
 }
 void
 VR_Window::destroy_render_window()
