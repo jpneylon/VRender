@@ -2,6 +2,10 @@
 #include <helper_cuda.h>
 #include <helper_math.h>
 
+#define tstep       0.005f
+#define maxSteps    500
+#define opacity     0.95f
+
 typedef unsigned char uchar;
 
 uchar *d_volume;
@@ -90,8 +94,8 @@ float4 get_eye_ray_origin(const float3x4 &M, const float4 &v)
 }
 
 __device__
-float4 get_pix_val( int maxSteps, Ray eyeRay, float tstep, float tnear, float tfar,
-                    float offset, float scale, float dens, float opacity )
+float4 get_pix_val( Ray eyeRay, float tnear, float tfar,
+                    float offset, float scale, float dens )
 {
     float t = tnear;
     float3 pos = eyeRay.o + eyeRay.d * tnear;
@@ -138,9 +142,6 @@ void d_render( unsigned char *d_output,
                float offset,
                float scale )
 {
-    const int maxSteps = 500;
-    const float tstep = 0.005f;
-    const float opacityThreshold = 0.95f;
     const float3 boxMin = make_float3(-1.0f, -1.0f, -1.0f);
     const float3 boxMax = make_float3(1.0f, 1.0f, 1.0f);
 
@@ -161,19 +162,23 @@ void d_render( unsigned char *d_output,
 	float tnear, tfar;
 	int hit = intersectBox(eyeRay, boxMin, boxMax, &tnear, &tfar);
     if (!hit) return;
-	if (tnear < 0.0f) tnear = 0.0f;     // clamp to near plane
+
+    // clamp to near plane
+	if (tnear < 0.0f) tnear = 0.0f;
 
     // march along ray from front to back, accumulating color
     float4 sum = make_float4(0.0f);
-    sum += get_pix_val( maxSteps, eyeRay, tstep, tnear, tfar, offset, scale, dens, opacityThreshold );
+    sum += get_pix_val( eyeRay, tnear, tfar, offset, scale, dens );
     sum *= bright;
 
-    // write output color
+    // clamp to [0.0, 1.0]
     float4 rgba;
-    rgba.x = __saturatef(sum.x);   // clamp to [0.0, 1.0]
+    rgba.x = __saturatef(sum.x);
     rgba.y = __saturatef(sum.y);
     rgba.z = __saturatef(sum.z);
     rgba.w = __saturatef(sum.w);
+
+    // write output color
     d_output[3*(x + imageW * y) + 0] = (unsigned char) (255 * rgba.x);
     d_output[3*(x + imageW * y) + 1] = (unsigned char) (255 * rgba.y);
     d_output[3*(x + imageW * y) + 2] = (unsigned char) (255 * rgba.z);
@@ -195,18 +200,79 @@ void cuda_create_color_maps( float3 *position,
     uint3 rgb = color[in];
 
     float3 floc = (pos - d_world.start) / d_world.resolution;
-    int x = __float2int_rn(floc.x);
-    int y = __float2int_rn(floc.y);
-    int z = __float2int_rn(floc.z);
+
+    int x = __float2int_rd(floc.x);
+    int y = __float2int_rd(floc.y);
+    int z = __float2int_rd(floc.z);
+
+    float3 plus_frac = make_float3( floc.x - __int2float_rn(x),
+                                    floc.y - __int2float_rn(y),
+                                    floc.z - __int2float_rn(z) );
+    float3 min_frac = make_float3(1,1,1) - plus_frac;
 
     if (x < 0 || y < 0 || z < 0 || x >= d_world.size || y >= d_world.size || z >= d_world.size ) return;
-
     uint out = x + d_world.size * (y + d_world.size * z);
-    if (out >= d_world.count) return;
 
     red[out] = rgb.x;
     green[out] = rgb.y;
     blue[out] = rgb.z;
+/*
+    int nx = x - 1;
+    int ny = y;
+    int nz = z;
+
+    if (nx >= 0 || ny >= 0 || nz >= 0 || nx < d_world.size || ny < d_world.size || nz < d_world.size )
+    {
+        out = nx + d_world.size * (ny + d_world.size * nz);
+        red[out] = rgb.x * min_frac.x;
+        green[out] = rgb.y * min_frac.x;
+        blue[out] = rgb.z * min_frac.x;
+    }
+    nx = x + 1;
+    if (nx >= 0 || ny >= 0 || nz >= 0 || nx < d_world.size || ny < d_world.size || nz < d_world.size )
+    {
+        out = nx + d_world.size * (ny + d_world.size * nz);
+        red[out] = rgb.x * plus_frac.x;
+        green[out] = rgb.y * plus_frac.x;
+        blue[out] = rgb.z * plus_frac.x;
+    }
+
+    nx = x;
+    ny = y - 1;
+    if (nx >= 0 || ny >= 0 || nz >= 0 || nx < d_world.size || ny < d_world.size || nz < d_world.size )
+    {
+        out = nx + d_world.size * (ny + d_world.size * nz);
+        red[out] = rgb.x * min_frac.y;
+        green[out] = rgb.y * min_frac.y;
+        blue[out] = rgb.z * min_frac.y;
+    }
+    ny = y + 1;
+    if (nx >= 0 || ny >= 0 || nz >= 0 || nx < d_world.size || ny < d_world.size || nz < d_world.size )
+    {
+        out = nx + d_world.size * (ny + d_world.size * nz);
+        red[out] = rgb.x * plus_frac.y;
+        green[out] = rgb.y * plus_frac.y;
+        blue[out] = rgb.z * plus_frac.y;
+    }
+
+    ny = y;
+    nz = z - 1;
+    if (nx >= 0 || ny >= 0 || nz >= 0 || nx < d_world.size || ny < d_world.size || nz < d_world.size )
+    {
+        out = nx + d_world.size * (ny + d_world.size * nz);
+        red[out] = rgb.x * min_frac.z;
+        green[out] = rgb.y * min_frac.z;
+        blue[out] = rgb.z * min_frac.z;
+    }
+    nz = z + 1;
+    if (nx >= 0 || ny >= 0 || nz >= 0 || nx < d_world.size || ny < d_world.size || nz < d_world.size )
+    {
+        out = nx + d_world.size * (ny + d_world.size * nz);
+        red[out] = rgb.x * plus_frac.z;
+        green[out] = rgb.y * plus_frac.z;
+        blue[out] = rgb.z * plus_frac.z;
+    }
+*/
 }
 
 

@@ -10,6 +10,7 @@ VR_Window::VR_Window()
 
     vrender = new VRender;
     cloud = new Cloud;
+    volume_origin = make_float3( 0.6, 0, 0 );
 }
 
 VR_Window::~VR_Window()
@@ -63,11 +64,10 @@ VR_Window::open_file()
             {
                 // convert point from mm to meter
                 float3 pos_meter = position / 1000.f;
-                float3 origin = make_float3( 0.6, 0, 0 );
-                float3 vec = pos_meter - origin;
+                float3 vec = pos_meter - volume_origin;
                 float distance = length( vec );
 
-                if ( distance < 0.5 ) // check if the point is within x meters of the origin (0,0,0)
+                if ( distance < MAX_RADIUS ) // check if the point is within x meters of the origin (0,0,0)
                 {
                     if (position.x > cloud->max_pos.x) cloud->max_pos.x = position.x;
                     if (position.x < cloud->min_pos.x) cloud->min_pos.x = position.x;

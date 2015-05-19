@@ -9,6 +9,7 @@
 #define STARTDIR "/home/anand/code/data"
 #define MAX_VOLUME_SIZE 384
 #define MASK_BONUS 16
+#define MAX_RADIUS 1
 
 
 class VR_Window : public Gtk::Box
@@ -39,6 +40,8 @@ class VR_Window : public Gtk::Box
 
     VRender *vrender;
     Cloud *cloud;
+
+    float3 volume_origin;
 
     char *point_cloud_list_file;
     bool pc_file_open;

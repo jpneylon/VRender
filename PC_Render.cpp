@@ -123,12 +123,15 @@ PC_Render::file_close()
 void
 PC_Render::file_open()
 {
-    vr_window = new VR_Window;
-    vr_window->open_file();
-    viewBox.pack_start( *vr_window );
-    cwdLabel.set_text( vr_window->get_file_name() );
-    vr_window->create_render_window();
-    renderer_open = true;
+    if (!renderer_open)
+    {
+        vr_window = new VR_Window;
+        vr_window->open_file();
+        viewBox.pack_start( *vr_window );
+        cwdLabel.set_text( vr_window->get_file_name() );
+        vr_window->create_render_window();
+        renderer_open = true;
+    }
     show_all_children();
 }
 
