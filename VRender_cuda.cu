@@ -108,7 +108,7 @@ void initializeVRender( cudaExtent      volumeSize,
 
     // RED
     checkCudaErrors( cudaMalloc3DArray( &d_redArray, &channelDesc, volumeSize ) );
-    redParams.srcPtr   =   make_cudaPitchedPtr( d_red, volumeSize.width*sizeof(uchar), volumeSize.width, volumeSize.height );
+    redParams.srcPtr   =   make_cudaPitchedPtr( d_red, volumeSize.width, volumeSize.width, volumeSize.height );
     redParams.dstArray =   d_redArray;
     redParams.extent   =   volumeSize;
     redParams.kind     =   cudaMemcpyDeviceToDevice;
@@ -124,7 +124,7 @@ void initializeVRender( cudaExtent      volumeSize,
 
     // GREEN
     checkCudaErrors( cudaMalloc3DArray( &d_greenArray, &channelDesc, volumeSize ) );
-    greenParams.srcPtr   =   make_cudaPitchedPtr( d_green, volumeSize.width*sizeof(uchar), volumeSize.width, volumeSize.height );
+    greenParams.srcPtr   =   make_cudaPitchedPtr( d_green, volumeSize.width, volumeSize.width, volumeSize.height );
     greenParams.dstArray =   d_greenArray;
     greenParams.extent   =   volumeSize;
     greenParams.kind     =   cudaMemcpyDeviceToDevice;
@@ -140,7 +140,7 @@ void initializeVRender( cudaExtent      volumeSize,
 
     // BLUE
     checkCudaErrors( cudaMalloc3DArray( &d_blueArray, &channelDesc, volumeSize ) );
-    blueParams.srcPtr   =   make_cudaPitchedPtr( d_blue, volumeSize.width*sizeof(uchar), volumeSize.width, volumeSize.height );
+    blueParams.srcPtr   =   make_cudaPitchedPtr( d_blue, volumeSize.width, volumeSize.width, volumeSize.height );
     blueParams.dstArray =   d_blueArray;
     blueParams.extent   =   volumeSize;
     blueParams.kind     =   cudaMemcpyDeviceToDevice;
@@ -155,8 +155,8 @@ void initializeVRender( cudaExtent      volumeSize,
     checkCudaErrors( cudaBindTextureToArray( texBlue, d_blueArray, channelDesc ) );
 
     // OUTPUT BUFFER
-    checkCudaErrors( cudaMalloc( (void**) &d_volume, imageW * imageH * 3 * sizeof(uchar) ) );
-    checkCudaErrors( cudaMemset( d_volume, 0, imageW * imageH * 3 * sizeof(uchar) ) );
+    checkCudaErrors( cudaMalloc( (void**) &d_volume, imageW * imageH * 3 ) );
+    checkCudaErrors( cudaMemset( d_volume, 0, imageW * imageH * 3 ) );
 
     cudaEventRecord( stop, 0 );
     cudaEventSynchronize( stop );
@@ -202,11 +202,12 @@ void render_kernel( dim3 gridSize, dim3 blockSize,
     cudaEventCreate(&stop);
     cudaEventRecord(start, 0);
 
+    checkCudaErrors( cudaMemset( d_volume, 0, imageW * imageH * 3 ) );
     d_render<<<gridSize,blockSize>>>( d_volume,
                                       imageW, imageH,
                                       dens, bright, offset, scale );
     cudaThreadSynchronize();
-    checkCudaErrors( cudaMemcpy( buffer, d_volume, imageW * imageH * 3 * sizeof(unsigned char), cudaMemcpyDeviceToHost ) );
+    checkCudaErrors( cudaMemcpy( buffer, d_volume, imageW * imageH * 3, cudaMemcpyDeviceToHost ) );
 
     cudaEventRecord( stop, 0 );
     cudaEventSynchronize( stop );

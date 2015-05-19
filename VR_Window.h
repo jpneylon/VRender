@@ -7,7 +7,7 @@
 #include "VRender.h"
 
 #define STARTDIR "/home/anand/code/data"
-#define MAX_VOLUME_SIZE 512
+#define MAX_VOLUME_SIZE 384
 #define MASK_BONUS 16
 
 
