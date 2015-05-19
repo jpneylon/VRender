@@ -1,0 +1,40 @@
+#ifndef __PC_RENDER_CLASS_H__
+#define __PC_RENDER_CLASS_H__
+
+
+#include <gtkmm.h>
+#include "../VRender/VR_Window.h"
+
+
+class PC_Render : public Gtk::Window
+{
+  public:
+    PC_Render();
+    virtual ~PC_Render();
+
+  protected:
+    void toggle_render_window();
+    void file_close();
+    void file_open();
+    void file_print();
+    void delete_event();
+
+    // Child Widgets
+    Gtk::Box        viewBox;
+    Gtk::Label      cwdLabel;
+    Gtk::Box        mainBox;
+    Gtk::Label      label;
+    Gtk::Box        cwdBox;
+
+    Gtk::Widget *menuBar;
+    Gtk::Widget *toolBar;
+
+    Glib::RefPtr<Gtk::UIManager> manager;
+    Glib::RefPtr<Gtk::ActionGroup> actionGroup;
+
+    // Variables
+    VR_Window *vr_window;
+    bool renderer_open;
+};
+
+#endif // __PC_RENDER_CLASS_H__
