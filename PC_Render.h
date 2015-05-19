@@ -3,7 +3,7 @@
 
 
 #include <gtkmm.h>
-#include "../VRender/VR_Window.h"
+#include "VR_Window.h"
 
 
 class PC_Render : public Gtk::Window
