@@ -5,8 +5,8 @@ VRender::VRender()
 {
     volumeSize = make_cudaExtent( 256, 256, 256 );
 
-    width = 800;
-    height = 800;
+    width = BUFFER_SIZE;
+    height = BUFFER_SIZE;
 
     blockSize.x = 16;
     blockSize.y = 16;
@@ -15,23 +15,25 @@ VRender::VRender()
     viewTranslation = make_float3( 0, 0, 3 );
 
     density = 0.25f;
-    brightness = 1.f;
+    brightness = 2.5f;
     transferOffset = 0.f;
     transferScale = 1.f;
+
+    fps_idx = 0;
+    fps_frames = new float[FPS_SIZE];
+    memset( fps_frames, 0, FPS_SIZE * sizeof(float) );
+    fps_text = new char[16];
+    sprintf(fps_text,"0.0");
 }
 VRender::~VRender()
 {
     freeCudaBuffers();
     delete [] render_buf;
+    delete [] fps_text;
+    delete [] fps_frames;
 }
 
 
-unsigned char *
-VRender::get_vrender_buffer()
-{
-    render();
-    return render_buf;
-}
 void
 VRender::set_vrender_parameters( float r_dens, float r_bright, float r_offset, float r_scale )
 {
@@ -67,39 +69,6 @@ VRender::set_vrender_zoom( float dy )
     setInvViewMatrix();
 }
 
-int
-VRender::init_vrender( unsigned int   data_size,
-                        unsigned char  *red_map,
-                        unsigned char  *green_map,
-                        unsigned char  *blue_map )
-{
-    volumeSize.width = data_size;
-    volumeSize.height = data_size;
-    volumeSize.depth = data_size;
-
-    render_buf = new unsigned char[ height * width * 3 ];
-    memset( render_buf, 0, height * width * 3 * sizeof(unsigned char) );
-
-    initializeVRender( red_map, green_map, blue_map, volumeSize, width, height );
-
-    gridSize = dim3( iDivUp(width, blockSize.x), iDivUp(height, blockSize.y) );
-
-    memset( identityMatrix, 0, 16 * sizeof(float ) );
-    identityMatrix[0]  = 1;
-    identityMatrix[5]  = 1;
-    identityMatrix[10] = 1;
-    identityMatrix[15] = 1;
-
-    memcpy( modelViewMatrix, identityMatrix, 16 * sizeof(float ) );
-    transformModelViewMatrix();
-    setInvViewMatrix();
-
-    return 1;
-}
-
-
-
-
 void
 VRender::setInvViewMatrix()
 {
@@ -119,13 +88,6 @@ VRender::setInvViewMatrix()
     copyInvViewMatrix( invViewMatrix, sizeof(float4)*3 );
 }
 
-void
-VRender::render()
-{
-    memset( render_buf, 0, width * height * 3 * sizeof(unsigned char) );
-    render_kernel( gridSize, blockSize, render_buf, width, height, density, brightness, transferOffset, transferScale );
-    getLastCudaError("Kernel execution failed");
-}
 
 void
 VRender::translateMat( float *matrix, float3 translation )
@@ -223,16 +185,60 @@ VRender::transformModelViewMatrix()
 }
 
 
+void
+VRender::render()
+{
+    render_kernel( gridSize, blockSize, render_buf, width, height, density, brightness, transferOffset, transferScale, &fps_frames[fps_idx] );
+
+    float time = fps_frames[0];
+    for (uint f = 1; f < FPS_SIZE; f++)
+        time += fps_frames[f];
+    sprintf(fps_text,"%f", FPS_SIZE / time );
+    fps_idx = (fps_idx + 1) % FPS_SIZE;
+}
+
+unsigned char *
+VRender::get_vrender_buffer()
+{
+    render();
+    return render_buf;
+}
 
 
+void
+VRender::create_color_maps( Cloud *cloud )
+{
+    createVRenderColorMaps( cloud );
+}
 
+int
+VRender::init_vrender( Cloud *cloud)
+{
+    create_color_maps( cloud );
 
+    volumeSize.width = cloud->world_size;
+    volumeSize.height = cloud->world_size;
+    volumeSize.depth = cloud->world_size;
 
+    render_buf = new unsigned char[ height * width * 3 ];
 
+    initializeVRender( volumeSize, width, height );
 
+    gridSize = dim3( iDivUp(width, blockSize.x), iDivUp(height, blockSize.y) );
 
+    memset( identityMatrix, 0, 16 * sizeof(float ) );
+    identityMatrix[0]  = 1;
+    identityMatrix[5]  = 1;
+    identityMatrix[10] = 1;
+    identityMatrix[15] = 1;
 
+    memcpy( modelViewMatrix, identityMatrix, 16 * sizeof(float ) );
+    transformModelViewMatrix();
+    setInvViewMatrix();
+    render();
 
+    return 1;
+}
 
 
 

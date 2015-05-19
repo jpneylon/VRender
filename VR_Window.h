@@ -2,41 +2,13 @@
 #define __VR_WINDOW_CLASS_H__
 
 #include <gtkmm.h>
-#include <vector>
+
+#include <time.h>
 #include "VRender.h"
 
 #define STARTDIR "/home/anand/code/data"
 #define MAX_VOLUME_SIZE 512
-#define MASK_BONUS 0
-
-
-class Cloud
-{
-  public:
-    Cloud()
-    {
-        count = 0;
-        max_pos.x = -999999;
-        max_pos.y = -999999;
-        max_pos.z = -999999;
-        min_pos.x = 999999;
-        min_pos.y = 999999;
-        min_pos.z = 999999;
-    }
-
-    std::vector<float3> position;
-    std::vector<uint3> rgb;
-    uint count;
-    float3 max_pos;
-    float3 min_pos;
-    float3 data_dim;
-    float3 world_origin;
-    float3 world_start;
-    uint   world_size;
-    float  world_res;
-    uint   world_count;
-    float  world_dim;
-};
+#define MASK_BONUS 16
 
 
 class VR_Window : public Gtk::Box
@@ -50,19 +22,10 @@ class VR_Window : public Gtk::Box
     char *get_file_name() { return point_cloud_list_file; };
 
     void create_render_window();
-    void destroy_render_window();
-    bool get_renderer_open()
-    {
-        if (pc_file_open)
-            return renderer_open;
-        else
-            return "No open files.";
-    };
 
   private:
 
     void select_file();
-    void create_color_maps();
     void update_render_buffer();
     void set_render_density();
     void set_render_brightness();
@@ -74,19 +37,16 @@ class VR_Window : public Gtk::Box
     virtual bool render_button_press_event(GdkEventButton *event);
     virtual bool render_motion_notify_event(GdkEventMotion *event);
 
-    VRender vrender;
-    Cloud cloud;
-
-    bool maps_allocated;
-    unsigned char *red_map;
-    unsigned char *green_map;
-    unsigned char *blue_map;
+    VRender *vrender;
+    Cloud *cloud;
 
     char *point_cloud_list_file;
-    bool renderer_open;
     bool pc_file_open;
 
-    Gtk::Image               render_image;
+    Gtk::Image      render_image;
+    Gtk::Label      fps_update;
+    Gtk::Label      fps_label;
+    Gtk::Box        fps_box;
 
     Glib::RefPtr<Gtk::Adjustment>     dens_adjust;
     Glib::RefPtr<Gtk::Adjustment>     bright_adjust;

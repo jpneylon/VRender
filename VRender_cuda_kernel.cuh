@@ -6,6 +6,8 @@ typedef unsigned char uchar;
 
 uchar *d_volume;
 
+uchar *d_red, *d_green, *d_blue;
+
 cudaArray *d_redArray = 0;
 cudaArray *d_blueArray = 0;
 cudaArray *d_greenArray = 0;
@@ -19,9 +21,18 @@ texture<uchar, 3, cudaReadModeNormalizedFloat> texGreen;
 texture<uchar, 3, cudaReadModeNormalizedFloat> texBlue;
 
 typedef struct {
+    uint npoints;
+    uint count;
+    float3 start;
+    float resolution;
+    uint size;
+} WORLD;
+
+typedef struct {
     float4 m[3];
 } float3x4;
 
+__constant__ WORLD d_world;
 __constant__ float3x4 c_invViewMatrix;
 __constant__ int dID;
 __constant__ float dmax, dmin;
@@ -128,7 +139,7 @@ void d_render( unsigned char *d_output,
                float scale )
 {
     const int maxSteps = 500;
-    const float tstep = 0.01f;
+    const float tstep = 0.005f;
     const float opacityThreshold = 0.95f;
     const float3 boxMin = make_float3(-1.0f, -1.0f, -1.0f);
     const float3 boxMax = make_float3(1.0f, 1.0f, 1.0f);
@@ -169,5 +180,33 @@ void d_render( unsigned char *d_output,
 }
 
 
+__global__
+void cuda_create_color_maps( float3 *position,
+                             uint3  *color,
+                             uchar  *red,
+                             uchar  *green,
+                             uchar  *blue )
+{
+    uint bIdx = blockIdx.x + gridDim.x * ( blockIdx.y + gridDim.y * blockIdx.z );
+    uint in = threadIdx.x + blockDim.x * bIdx;
+    if (in >= d_world.npoints) return;
+
+    float3 pos = position[in];
+    uint3 rgb = color[in];
+
+    float3 floc = (pos - d_world.start) / d_world.resolution;
+    int x = __float2int_rn(floc.x);
+    int y = __float2int_rn(floc.y);
+    int z = __float2int_rn(floc.z);
+
+    if (x < 0 || y < 0 || z < 0 || x >= d_world.size || y >= d_world.size || z >= d_world.size ) return;
+
+    uint out = x + d_world.size * (y + d_world.size * z);
+    if (out >= d_world.count) return;
+
+    red[out] = rgb.x;
+    green[out] = rgb.y;
+    blue[out] = rgb.z;
+}
 
 

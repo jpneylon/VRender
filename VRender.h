@@ -10,8 +10,11 @@
 #include <vector_functions.h>
 #include <driver_functions.h>
 
-#define PI 3.14159f
+#include "Cloud.h"
 
+#define PI 3.14159f
+#define BUFFER_SIZE 512
+#define FPS_SIZE 100
 
 
 class VRender
@@ -22,16 +25,15 @@ class VRender
 
         //functions
         unsigned char *get_vrender_buffer();
+        char *get_vrender_fps(){ return fps_text; };
 
         void set_vrender_parameters( float r_dens, float r_bright, float r_offset, float r_scale );
         void set_vrender_rotation( float dx, float dy );
         void set_vrender_translation( float dx, float dy );
         void set_vrender_zoom( float dy );
 
-        int init_vrender( unsigned int  data_size,
-                          unsigned char *red_map,
-                          unsigned char *green_map,
-                          unsigned char *blue_map );
+        int init_vrender( Cloud *cloud );
+
 
         int get_width()
         {
@@ -101,6 +103,7 @@ class VRender
 
     protected:
        //functions
+        void create_color_maps( Cloud *cloud );
         void setInvViewMatrix();
         void render();
 
@@ -113,8 +116,6 @@ class VRender
 
         //variables
         uint width, height;
-
-        int3 size;
 
         dim3 blockSize;
         dim3 gridSize;
@@ -133,6 +134,12 @@ class VRender
         float transferOffset;
         float transferScale;
         float last_x, last_y;
+
+        uint  fps_idx;
+        float *fps_frames;
+        char  *fps_text;
+
+        uint world_size;
 
         unsigned char *render_buf;
         unsigned char *d_volume;
