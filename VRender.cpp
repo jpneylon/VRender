@@ -24,6 +24,10 @@ VRender::VRender()
     memset( fps_frames, 0, FPS_SIZE * sizeof(float) );
     fps_text = new char[16];
     sprintf(fps_text,"0.0");
+
+    cycle = 0;
+    frame_counter = 0;
+    swap = 0;
 }
 VRender::~VRender()
 {
@@ -186,41 +190,46 @@ VRender::transformModelViewMatrix()
 
 
 void
-VRender::render()
+VRender::render( Cloud *cloud )
 {
-    render_kernel( gridSize, blockSize, render_buf, width, height, density, brightness, transferOffset, transferScale, &fps_frames[fps_idx] );
+    fps_frames[fps_idx] = 0;
+
+    if (frame_counter % 100 == 0)
+    {
+        cycle = (cycle + 1) % 3;
+        updateVRenderColorMaps( cloud, cycle, &fps_frames[fps_idx] );
+        frame_counter = 0;
+    }
+
+    swap = (frame_counter % 2) * width * height;
+    render_kernel( gridSize, blockSize, render_buf + swap, width, height, density, brightness, transferOffset, transferScale, &fps_frames[fps_idx] );
 
     float time = fps_frames[0];
     for (uint f = 1; f < FPS_SIZE; f++)
         time += fps_frames[f];
     sprintf(fps_text,"%f", FPS_SIZE / time );
     fps_idx = (fps_idx + 1) % FPS_SIZE;
+
+    frame_counter++;
 }
 
 unsigned char *
-VRender::get_vrender_buffer()
+VRender::get_vrender_buffer( Cloud *cloud )
 {
-    render();
-    return render_buf;
-}
-
-
-void
-VRender::create_color_maps( Cloud *cloud )
-{
-    createVRenderColorMaps( cloud );
+    render( cloud );
+    return (render_buf + swap);
 }
 
 int
 VRender::init_vrender( Cloud *cloud)
 {
-    create_color_maps( cloud );
+    createVRenderColorMaps( cloud );
 
-    volumeSize.width = cloud->world_size;
-    volumeSize.height = cloud->world_size;
-    volumeSize.depth = cloud->world_size;
+    volumeSize.width = cloud->world.size.x;
+    volumeSize.height = cloud->world.size.y;
+    volumeSize.depth = cloud->world.size.z;
 
-    render_buf = new unsigned char[ height * width * 3 ];
+    render_buf = new unsigned char[ 2 * height * width * 3 ];
 
     initializeVRender( volumeSize, width, height );
 
@@ -235,7 +244,7 @@ VRender::init_vrender( Cloud *cloud)
     memcpy( modelViewMatrix, identityMatrix, 16 * sizeof(float ) );
     transformModelViewMatrix();
     setInvViewMatrix();
-    render();
+    render( cloud );
 
     return 1;
 }

@@ -3,32 +3,43 @@
 
 #include <vector>
 
+
+typedef struct{
+    uint count;
+    float3 max;
+    float3 min;
+    float3 dimension;
+} PCListData;
+
+
+typedef struct {
+    uint count;
+    uint3 size;
+    float3 origin;
+    float3 min;
+    float3 max;
+    float3 resolution;
+    float3 dimension;
+} WORLD;
+
+
 class Cloud
 {
   public:
     Cloud()
     {
-        count = 0;
-        max_pos.x = -999999;
-        max_pos.y = -999999;
-        max_pos.z = -999999;
-        min_pos.x = 999999;
-        min_pos.y = 999999;
-        min_pos.z = 999999;
+        pcl.count = 0;
+        pcl.max.x = -999999;
+        pcl.max.y = -999999;
+        pcl.max.z = -999999;
+        pcl.min.x = 999999;
+        pcl.min.y = 999999;
+        pcl.min.z = 999999;
     }
-
     std::vector<float3> position;
     std::vector<uint3> rgb;
-    uint count;
-    float3 max_pos;
-    float3 min_pos;
-    float3 data_dim;
-    float3 world_origin;
-    float3 world_start;
-    uint   world_size;
-    float  world_res;
-    uint   world_count;
-    float  world_dim;
+    PCListData pcl;
+    WORLD world;
 };
 
 

@@ -9,8 +9,35 @@ VR_Window::VR_Window()
     pc_file_open = false;
 
     vrender = new VRender;
-    cloud = new Cloud;
     volume_origin = make_float3( 0.6, 0, 0 );
+
+    cloud = new Cloud;
+
+    cloud->world.resolution = make_float3( 8, 8, 8 );
+    printf("\n World Resolution: %f x %f x %f", cloud->world.resolution.x, cloud->world.resolution.y, cloud->world.resolution.z );
+
+    cloud->world.size = make_uint3( MAX_VOLUME_SIDE, MAX_VOLUME_SIDE, MAX_VOLUME_SIDE );
+    printf("\n World Size: %d x %d x %d", cloud->world.size.x, cloud->world.size.y, cloud->world.size.z );
+
+    cloud->world.count = cloud->world.size.x * cloud->world.size.y * cloud->world.size.z;
+    printf("\n World Count: %d",cloud->world.count);
+
+    cloud->world.dimension = make_float3( cloud->world.resolution.x * (float)cloud->world.size.x,
+                                          cloud->world.resolution.y * (float)cloud->world.size.y,
+                                          cloud->world.resolution.z * (float)cloud->world.size.z );
+    printf("\n World Dimension: %f x %f x %f", cloud->world.dimension.x, cloud->world.dimension.y, cloud->world.dimension.z );
+
+    cloud->world.min.x = 1000.f * volume_origin.x - 0.5 * cloud->world.dimension.x;
+    cloud->world.min.y = 1000.f * volume_origin.y - 0.5 * cloud->world.dimension.y;
+    cloud->world.min.z = 1000.f * volume_origin.z - 0.5 * cloud->world.dimension.z;
+    printf("\n World Minimum: %f %f %f", cloud->world.min.x, cloud->world.min.y, cloud->world.min.z );
+
+    cloud->world.max.x = cloud->world.min.x + cloud->world.dimension.x;
+    cloud->world.max.y = cloud->world.min.y + cloud->world.dimension.y;
+    cloud->world.max.z = cloud->world.min.z + cloud->world.dimension.z;
+    printf("\n World Maximum: %f %f %f\n", cloud->world.max.x, cloud->world.max.y, cloud->world.max.z );
+
+    adaptive_world_sizing = false;
 }
 
 VR_Window::~VR_Window()
@@ -62,21 +89,18 @@ VR_Window::open_file()
             int check = sscanf(trash, "%f %f %f %d %d %d", &position.x, &position.y, &position.z, &rgb.x, &rgb.y, &rgb.z);
             if (check == 6)
             {
-                // convert point from mm to meter
-                float3 pos_meter = position / 1000.f;
-                float3 vec = pos_meter - volume_origin;
-                float distance = length( vec );
-
-                if ( distance < MAX_RADIUS ) // check if the point is within x meters of the origin (0,0,0)
+                if ( position.x > cloud->world.min.x && position.x < cloud->world.max.x
+                     && position.y > cloud->world.min.y && position.y < cloud->world.max.y
+                     && position.z > cloud->world.min.z && position.z < cloud->world.max.z )
                 {
-                    if (position.x > cloud->max_pos.x) cloud->max_pos.x = position.x;
-                    if (position.x < cloud->min_pos.x) cloud->min_pos.x = position.x;
+                    if (position.x > cloud->pcl.max.x) cloud->pcl.max.x = position.x;
+                    if (position.x < cloud->pcl.min.x) cloud->pcl.min.x = position.x;
 
-                    if (position.y > cloud->max_pos.y) cloud->max_pos.y = position.y;
-                    if (position.y < cloud->min_pos.y) cloud->min_pos.y = position.y;
+                    if (position.y > cloud->pcl.max.y) cloud->pcl.max.y = position.y;
+                    if (position.y < cloud->pcl.min.y) cloud->pcl.min.y = position.y;
 
-                    if (position.z > cloud->max_pos.z) cloud->max_pos.z = position.z;
-                    if (position.z < cloud->min_pos.z) cloud->min_pos.z = position.z;
+                    if (position.z > cloud->pcl.max.z) cloud->pcl.max.z = position.z;
+                    if (position.z < cloud->pcl.min.z) cloud->pcl.min.z = position.z;
 
                     cloud->position.push_back(position);
                     cloud->rgb.push_back(rgb);
@@ -90,47 +114,16 @@ VR_Window::open_file()
             printf("\n Error while reading point list. Different number of positions and color channels. Aborting.\n");
         }
 
-        cloud->count = cloud->position.size();
-        printf("\n %d points read from file", cloud->count );
+        cloud->pcl.count = cloud->position.size();
+        printf("\n %d points read from file", cloud->pcl.count );
 
-        printf("\n Maximum position: %f %f %f", cloud->max_pos.x, cloud->max_pos.y, cloud->max_pos.z );
-        printf("\n Minimum position: %f %f %f", cloud->min_pos.x, cloud->min_pos.y, cloud->min_pos.z );
+        printf("\n PCList Maximum: %f %f %f", cloud->pcl.max.x, cloud->pcl.max.y, cloud->pcl.max.z );
+        printf("\n PCList Minimum: %f %f %f", cloud->pcl.min.x, cloud->pcl.min.y, cloud->pcl.min.z );
 
-        cloud->data_dim.x = abs( cloud->max_pos.x - cloud->min_pos.x );
-        cloud->data_dim.y = abs( cloud->max_pos.y - cloud->min_pos.y );
-        cloud->data_dim.z = abs( cloud->max_pos.z - cloud->min_pos.z );
-        printf("\n Data Dimensions: %f %f %f", cloud->data_dim.x, cloud->data_dim.y, cloud->data_dim.z );
-
-        cloud->world_origin.x = 0.5 * (cloud->max_pos.x + cloud->min_pos.x);
-        cloud->world_origin.y = 0.5 * (cloud->max_pos.y + cloud->min_pos.y);
-        cloud->world_origin.z = 0.5 * (cloud->max_pos.z + cloud->min_pos.z);
-        printf("\n World Origin: %f %f %f", cloud->world_origin.x, cloud->world_origin.y, cloud->world_origin.z );
-
-        int3 world_size;
-        world_size.x = (int)cloud->data_dim.x;
-        world_size.y = (int)cloud->data_dim.y;
-        world_size.z = (int)cloud->data_dim.z;
-        cloud->world_res = 1;
-        while ( world_size.x > MAX_VOLUME_SIZE || world_size.y > MAX_VOLUME_SIZE || world_size.z > MAX_VOLUME_SIZE )
-        {
-            world_size.x /= 2;
-            world_size.y /= 2;
-            world_size.z /= 2;
-            cloud->world_res *= 2;
-        }
-        cloud->world_size = max( world_size.x, max( world_size.y, world_size.z ) );
-        printf("\n World Size: %d", cloud->world_size );
-
-        cloud->world_count = cloud->world_size * cloud->world_size * cloud->world_size;
-        printf("\n World Count: %d",cloud->world_count);
-        printf("\n World Resolution: %f", cloud->world_res );
-
-        cloud->world_dim = cloud->world_res * (float)cloud->world_size;
-
-        cloud->world_start.x = cloud->world_origin.x - 0.5 * cloud->world_dim;
-        cloud->world_start.y = cloud->world_origin.y - 0.5 * cloud->world_dim;
-        cloud->world_start.z = cloud->world_origin.z - 0.5 * cloud->world_dim;
-        printf("\n World Start: %f %f %f\n", cloud->world_start.x, cloud->world_start.y, cloud->world_start.z );
+        cloud->pcl.dimension.x = abs( cloud->pcl.max.x - cloud->pcl.min.x );
+        cloud->pcl.dimension.y = abs( cloud->pcl.max.y - cloud->pcl.min.y );
+        cloud->pcl.dimension.z = abs( cloud->pcl.max.z - cloud->pcl.min.z );
+        printf("\n PCList Dimensions: %f %f %f\n", cloud->pcl.dimension.x, cloud->pcl.dimension.y, cloud->pcl.dimension.z );
 
         printf("\n ||| TIME - Load Data File: %f ms\n", ((float)clock() - timer)*1000 / CLOCKS_PER_SEC );
     }
@@ -152,7 +145,7 @@ VR_Window::print_file()
 void
 VR_Window::update_render_buffer()
 {
-    Glib::RefPtr<Gdk::Pixbuf> render_pixbuf = Gdk::Pixbuf::create_from_data((const guint8*) vrender->get_vrender_buffer(),
+    Glib::RefPtr<Gdk::Pixbuf> render_pixbuf = Gdk::Pixbuf::create_from_data((const guint8*) vrender->get_vrender_buffer( cloud ),
                                                                                                Gdk::COLORSPACE_RGB,
                                                                                                false,
                                                                                                8,
@@ -318,7 +311,7 @@ VR_Window::create_render_window()
                                 | Gdk::POINTER_MOTION_HINT_MASK
                                 | Gdk::BUTTON_RELEASE_MASK);
 
-    render_pixbuf->create_from_data((const guint8*) vrender->get_vrender_buffer(),
+    render_pixbuf->create_from_data((const guint8*) vrender->get_vrender_buffer( cloud ),
                                                     Gdk::COLORSPACE_RGB,
                                                     false,
                                                     8,

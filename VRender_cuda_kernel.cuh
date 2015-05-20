@@ -1,3 +1,4 @@
+#include "Cloud.h"
 #include <cuda_runtime_api.h>
 #include <helper_cuda.h>
 #include <helper_math.h>
@@ -8,9 +9,19 @@
 
 typedef unsigned char uchar;
 
-uchar *d_volume;
 
+float3 *h_pos;
+float3 *d_pos;
+
+uint3 *h_color;
+uint3 *d_color;
+
+uint *cellStart, *cellEnd;
+uint *gridHash, *gridIndex;
+
+uchar *d_volume;
 uchar *d_red, *d_green, *d_blue;
+
 
 cudaArray *d_redArray = 0;
 cudaArray *d_blueArray = 0;
@@ -25,17 +36,10 @@ texture<uchar, 3, cudaReadModeNormalizedFloat> texGreen;
 texture<uchar, 3, cudaReadModeNormalizedFloat> texBlue;
 
 typedef struct {
-    uint npoints;
-    uint count;
-    float3 start;
-    float resolution;
-    uint size;
-} WORLD;
-
-typedef struct {
     float4 m[3];
 } float3x4;
 
+__constant__ PCListData d_pcl;
 __constant__ WORLD d_world;
 __constant__ float3x4 c_invViewMatrix;
 __constant__ int dID;
@@ -185,94 +189,155 @@ void d_render( unsigned char *d_output,
 }
 
 
+
+__device__ int3 calcGridPos(float3 p)
+{
+    int3 gridPos;
+    gridPos.x = floor((p.x - d_world.min.x) / d_world.resolution.x);
+    gridPos.y = floor((p.y - d_world.min.y) / d_world.resolution.y);
+    gridPos.z = floor((p.z - d_world.min.z) / d_world.resolution.z);
+    return gridPos;
+}
+__device__ uint calcGridHash(int3 gridPos)
+{
+    return __umul24( __umul24(gridPos.z, d_world.size.y), d_world.size.x) +
+                     __umul24(gridPos.y, d_world.size.x) +
+                              gridPos.x;
+}
+
 __global__
-void cuda_create_color_maps( float3 *position,
+void calcHashD(uint   *gridParticleHash,
+               uint   *gridParticleIndex,
+               float3 *pos )
+{
+    uint tid = __umul24(blockIdx.x, blockDim.x) + threadIdx.x;
+    if (tid >= d_pcl.count) return;
+
+    volatile float3 p = pos[tid];
+
+    // get address in grid
+    int3 gridPos = calcGridPos(p);
+    uint hash = calcGridHash(gridPos);
+
+    // store grid hash and point index
+    gridParticleHash[tid] = hash;
+    gridParticleIndex[tid] = tid;
+}
+
+__global__
+void reorderDataAndFindCellStartD(uint   *cellStart,        // output: cell start index
+                                  uint   *cellEnd,          // output: cell end index
+                                  uint   *gridParticleHash, // input: sorted grid hashes
+                                  uint   *gridParticleIndex)// input: sorted particle indices
+{
+    extern __shared__ uint sharedHash[];    // blockSize + 1 elements
+
+    uint tid = __umul24(blockIdx.x,blockDim.x) + threadIdx.x;
+    if (tid >= d_pcl.count) return;
+
+    uint hash;
+    if (tid < d_pcl.count)
+    {
+        hash = gridParticleHash[tid];
+        sharedHash[threadIdx.x+1] = hash;
+
+        if (tid > 0 && threadIdx.x == 0)
+        {
+            sharedHash[0] = gridParticleHash[tid-1];
+        }
+    }
+    __syncthreads();
+
+    if (tid < d_pcl.count)
+    {
+        if (tid == 0 || hash != sharedHash[threadIdx.x])
+        {
+            cellStart[hash] = tid;
+
+            if (tid > 0)
+                cellEnd[sharedHash[threadIdx.x]] = tid;
+        }
+
+        if (tid == d_pcl.count - 1)
+        {
+            cellEnd[hash] = tid + 1;
+        }
+    }
+}
+
+
+__global__
+void cuda_create_color_maps( float3 *pos,
                              uint3  *color,
+                             uint   *gridIndex,
+                             uint   *cellStart,
+                             uint   *cellEnd,
                              uchar  *red,
                              uchar  *green,
-                             uchar  *blue )
+                             uchar  *blue,
+                             uchar  cycle )
 {
-    uint bIdx = blockIdx.x + gridDim.x * ( blockIdx.y + gridDim.y * blockIdx.z );
-    uint in = threadIdx.x + blockDim.x * bIdx;
-    if (in >= d_world.npoints) return;
+    uint tid = __umul24(blockIdx.x,blockDim.x) + threadIdx.x;
+    if (tid >= d_pcl.count) return;
 
-    float3 pos = position[in];
-    uint3 rgb = color[in];
+    float3 p = pos[tid];
+    int3 gridPos = calcGridPos(p);
+    uint hash = calcGridHash(gridPos);
+    uint startIndex = cellStart[hash];
 
-    float3 floc = (pos - d_world.start) / d_world.resolution;
-
-    int x = __float2int_rd(floc.x);
-    int y = __float2int_rd(floc.y);
-    int z = __float2int_rd(floc.z);
-
-    float3 plus_frac = make_float3( floc.x - __int2float_rn(x),
-                                    floc.y - __int2float_rn(y),
-                                    floc.z - __int2float_rn(z) );
-    float3 min_frac = make_float3(1,1,1) - plus_frac;
-
-    if (x < 0 || y < 0 || z < 0 || x >= d_world.size || y >= d_world.size || z >= d_world.size ) return;
-    uint out = x + d_world.size * (y + d_world.size * z);
-
-    red[out] = rgb.x;
-    green[out] = rgb.y;
-    blue[out] = rgb.z;
-/*
-    int nx = x - 1;
-    int ny = y;
-    int nz = z;
-
-    if (nx >= 0 || ny >= 0 || nz >= 0 || nx < d_world.size || ny < d_world.size || nz < d_world.size )
+    if (startIndex != 0xffffffff)
     {
-        out = nx + d_world.size * (ny + d_world.size * nz);
-        red[out] = rgb.x * min_frac.x;
-        green[out] = rgb.y * min_frac.x;
-        blue[out] = rgb.z * min_frac.x;
-    }
-    nx = x + 1;
-    if (nx >= 0 || ny >= 0 || nz >= 0 || nx < d_world.size || ny < d_world.size || nz < d_world.size )
-    {
-        out = nx + d_world.size * (ny + d_world.size * nz);
-        red[out] = rgb.x * plus_frac.x;
-        green[out] = rgb.y * plus_frac.x;
-        blue[out] = rgb.z * plus_frac.x;
-    }
+        uint endIndex = cellEnd[hash];
+        float point_count = __int2float_rn( endIndex - startIndex );
 
-    nx = x;
-    ny = y - 1;
-    if (nx >= 0 || ny >= 0 || nz >= 0 || nx < d_world.size || ny < d_world.size || nz < d_world.size )
-    {
-        out = nx + d_world.size * (ny + d_world.size * nz);
-        red[out] = rgb.x * min_frac.y;
-        green[out] = rgb.y * min_frac.y;
-        blue[out] = rgb.z * min_frac.y;
-    }
-    ny = y + 1;
-    if (nx >= 0 || ny >= 0 || nz >= 0 || nx < d_world.size || ny < d_world.size || nz < d_world.size )
-    {
-        out = nx + d_world.size * (ny + d_world.size * nz);
-        red[out] = rgb.x * plus_frac.y;
-        green[out] = rgb.y * plus_frac.y;
-        blue[out] = rgb.z * plus_frac.y;
-    }
+        float rgb[3];
+        rgb[0] = 0;
+        rgb[1] = 0;
+        rgb[2] = 0;
 
-    ny = y;
-    nz = z - 1;
-    if (nx >= 0 || ny >= 0 || nz >= 0 || nx < d_world.size || ny < d_world.size || nz < d_world.size )
-    {
-        out = nx + d_world.size * (ny + d_world.size * nz);
-        red[out] = rgb.x * min_frac.z;
-        green[out] = rgb.y * min_frac.z;
-        blue[out] = rgb.z * min_frac.z;
+        uchar cid[3];
+        cid[0] = cycle;
+        cid[1] = (cycle + 1) % 3;
+        cid[2] = (cycle + 2) % 3;
+
+        for (uint p=startIndex; p<endIndex; p++)
+        {
+            uint point = gridIndex[p];
+            uint3 c = color[point];
+
+            rgb[ cid[0] ] += __int2float_rn(c.x);
+            rgb[ cid[1] ] += __int2float_rn(c.y);
+            rgb[ cid[2] ] += __int2float_rn(c.z);
+        }
+
+        red[hash] = __float2int_rn( rgb[0] / point_count );
+        green[hash] = __float2int_rn( rgb[1] / point_count );
+        blue[hash] = __float2int_rn (rgb[2] / point_count );
     }
-    nz = z + 1;
-    if (nx >= 0 || ny >= 0 || nz >= 0 || nx < d_world.size || ny < d_world.size || nz < d_world.size )
-    {
-        out = nx + d_world.size * (ny + d_world.size * nz);
-        red[out] = rgb.x * plus_frac.z;
-        green[out] = rgb.y * plus_frac.z;
-        blue[out] = rgb.z * plus_frac.z;
-    }
-*/
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

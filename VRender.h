@@ -24,7 +24,7 @@ class VRender
         ~VRender();
 
         //functions
-        unsigned char *get_vrender_buffer();
+        unsigned char *get_vrender_buffer( Cloud *cloud );
         char *get_vrender_fps(){ return fps_text; };
 
         void set_vrender_parameters( float r_dens, float r_bright, float r_offset, float r_scale );
@@ -105,17 +105,19 @@ class VRender
        //functions
         void create_color_maps( Cloud *cloud );
         void setInvViewMatrix();
-        void render();
+        void render( Cloud *cloud );
 
         void translateMat( float *matrix, float3 translation );
         void rotMat( float *matrix, float3 axis, float theta, float3 center );
         void multiplyModelViewMatrix( float *trans );
         void transformModelViewMatrix();
 
-        int iDivUp( int a, int b ){ return (a % b != 0) ? (a / b + 1) : (a / b); }
-
         //variables
         uint width, height;
+        unsigned char cycle;
+
+        uint frame_counter;
+        uint swap;
 
         dim3 blockSize;
         dim3 gridSize;
@@ -142,8 +144,6 @@ class VRender
         uint world_size;
 
         unsigned char *render_buf;
-        unsigned char *d_volume;
-        unsigned char *h_volume;
 };
 
 

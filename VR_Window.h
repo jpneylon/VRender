@@ -7,7 +7,7 @@
 #include "VRender.h"
 
 #define STARTDIR "/home/anand/code/data"
-#define MAX_VOLUME_SIZE 384
+#define MAX_VOLUME_SIDE 256
 #define MASK_BONUS 16
 #define MAX_RADIUS 1
 
@@ -45,6 +45,7 @@ class VR_Window : public Gtk::Box
 
     char *point_cloud_list_file;
     bool pc_file_open;
+    bool adaptive_world_sizing;
 
     Gtk::Image      render_image;
     Gtk::Label      fps_update;
