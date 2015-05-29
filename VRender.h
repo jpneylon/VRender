@@ -14,8 +14,8 @@
 
 #define PI 3.14159f
 #define BUFFER_SIZE 512
-#define FPS_SIZE 100
-
+#define FPS_SIZE 10
+#define RENDER_RESOLUTION 10
 
 class VRender
 {

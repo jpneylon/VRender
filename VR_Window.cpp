@@ -13,7 +13,7 @@ VR_Window::VR_Window()
 
     cloud = new Cloud;
 
-    cloud->world.resolution = make_float3( 8, 8, 8 );
+    cloud->world.resolution = make_float3( RENDER_RESOLUTION, RENDER_RESOLUTION, RENDER_RESOLUTION );
     printf("\n World Resolution: %f x %f x %f", cloud->world.resolution.x, cloud->world.resolution.y, cloud->world.resolution.z );
 
     cloud->world.size = make_uint3( MAX_VOLUME_SIDE, MAX_VOLUME_SIDE, MAX_VOLUME_SIDE );
